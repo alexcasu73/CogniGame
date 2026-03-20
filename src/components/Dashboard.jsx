@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { getData, hasPlayedToday } from '../utils/storage';
 import { getTodayGame, getGameInfo, ALL_GAMES } from '../utils/gameScheduler';
 import { BADGE_INFO } from '../utils/scoring';
 import StarRating from './StarRating';
 
-export default function Dashboard({ onStartGame, onStartBonusGame, nextBonusGame }) {
-  const data = getData();
+export default function Dashboard({ userData, user, onStartGame, onStartBonusGame, nextBonusGame, onLogout }) {
   const todayGame = getTodayGame();
   const gameInfo = getGameInfo(todayGame);
   const nextGameInfo = getGameInfo(nextBonusGame);
-  const played = hasPlayedToday();
-  const level = Math.floor(data.totalXP / 100) + 1;
-  const xpInLevel = data.totalXP % 100;
+
+  const today = new Date().toISOString().split('T')[0];
+  const played = userData.lastPlayed === today;
+
+  const level = Math.floor(userData.totalXP / 100) + 1;
+  const xpInLevel = userData.totalXP % 100;
   const [tab, setTab] = useState('home');
 
   return (
@@ -20,14 +21,19 @@ export default function Dashboard({ onStartGame, onStartBonusGame, nextBonusGame
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-3xl font-black text-indigo-700">CogniGame</h1>
-          <p className="text-gray-500 text-sm">Allena la mente ogni giorno</p>
+          <button
+            onClick={onLogout}
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            👤 {user.nickname} · esci
+          </button>
         </div>
         <div className="text-right">
           <div className="flex items-center gap-1 justify-end">
             <span className="text-orange-500">🔥</span>
-            <span className="font-bold text-gray-700">{data.streak} giorni</span>
+            <span className="font-bold text-gray-700">{userData.streak} giorni</span>
           </div>
-          <p className="text-sm text-gray-500">⚡ {data.totalXP} XP</p>
+          <p className="text-sm text-gray-500">⚡ {userData.totalXP} XP</p>
         </div>
       </div>
 
@@ -105,15 +111,15 @@ export default function Dashboard({ onStartGame, onStartBonusGame, nextBonusGame
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-              <p className="text-2xl font-black text-purple-600">{data.gamesPlayed}</p>
+              <p className="text-2xl font-black text-purple-600">{userData.gamesPlayed}</p>
               <p className="text-xs text-gray-500">Sessioni</p>
             </div>
             <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-              <p className="text-2xl font-black text-yellow-500">{'⭐'.repeat(Math.min(3, Math.floor(data.totalStars / Math.max(1, data.gamesPlayed) + 0.5)))}</p>
+              <p className="text-2xl font-black text-yellow-500">{'⭐'.repeat(Math.min(3, Math.floor(userData.totalStars / Math.max(1, userData.gamesPlayed) + 0.5)))}</p>
               <p className="text-xs text-gray-500">Stelle medie</p>
             </div>
             <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-              <p className="text-2xl font-black text-indigo-600">{data.badges.length}</p>
+              <p className="text-2xl font-black text-indigo-600">{userData.badges.length}</p>
               <p className="text-xs text-gray-500">Badge</p>
             </div>
           </div>
@@ -140,9 +146,9 @@ export default function Dashboard({ onStartGame, onStartBonusGame, nextBonusGame
 
       {tab === 'badge' && (
         <div className="flex flex-col gap-3 animate-fade-in">
-          <p className="text-gray-500 text-sm text-center">Hai {data.badges.length} badge su {Object.keys(BADGE_INFO).length}</p>
+          <p className="text-gray-500 text-sm text-center">Hai {userData.badges.length} badge su {Object.keys(BADGE_INFO).length}</p>
           {Object.entries(BADGE_INFO).map(([id, info]) => {
-            const earned = data.badges.includes(id);
+            const earned = userData.badges.includes(id);
             return (
               <div key={id} className={`flex items-center gap-4 p-4 rounded-2xl shadow-sm ${earned ? 'bg-white' : 'bg-gray-100 opacity-60'}`}>
                 <span className={`text-4xl ${earned ? '' : 'grayscale'}`}>{info.icon}</span>
@@ -159,13 +165,13 @@ export default function Dashboard({ onStartGame, onStartBonusGame, nextBonusGame
 
       {tab === 'storico' && (
         <div className="flex flex-col gap-3 animate-fade-in">
-          {data.history.length === 0 ? (
+          {userData.history.length === 0 ? (
             <div className="text-center text-gray-400 py-12">
               <p className="text-4xl mb-3">📅</p>
               <p>Nessuna sessione ancora. Gioca il tuo primo gioco!</p>
             </div>
           ) : (
-            data.history.map((h, i) => {
+            userData.history.map((h, i) => {
               const info = getGameInfo(h.gameType);
               return (
                 <div key={i} className="bg-white rounded-2xl p-4 flex items-center gap-4 shadow-sm">

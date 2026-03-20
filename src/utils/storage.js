@@ -26,9 +26,9 @@ export function getTodayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
-export function getPlayerLevel() {
-  const data = getData();
-  return Math.floor(data.totalXP / 100) + 1;
+export function getPlayerLevel(totalXP) {
+  const xp = totalXP ?? getData().totalXP;
+  return Math.floor(xp / 100) + 1;
 }
 
 export function hasPlayedToday() {

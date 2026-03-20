@@ -77,7 +77,7 @@ export default function MemoryGame({ onComplete, level = 1 }) {
       timeLimit={timeLimit}
       difficulty={tier}
     >
-      <div className={`grid grid-cols-${cols} ${gap} p-2`}>
+      <div className={`grid ${gap} p-2`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {cards.map(card => {
           const isFlipped = flipped.includes(card.id) || matched.includes(card.id);
           const isMatched = matched.includes(card.id);

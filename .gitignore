@@ -1,0 +1,5 @@
+node_modules/
+dist/
+server/cognigame.db
+server/cognigame.db-shm
+server/cognigame.db-wal

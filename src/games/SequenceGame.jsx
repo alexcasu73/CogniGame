@@ -3,12 +3,12 @@ import GameWrapper from '../components/GameWrapper';
 import { getDifficultyTier } from '../utils/scoring';
 
 const ALL_COLORS = [
-  { id: 0, bg: 'bg-red-400',    active: 'bg-red-200',    label: '🔴' },
-  { id: 1, bg: 'bg-blue-400',   active: 'bg-blue-200',   label: '🔵' },
-  { id: 2, bg: 'bg-green-400',  active: 'bg-green-200',  label: '🟢' },
-  { id: 3, bg: 'bg-yellow-400', active: 'bg-yellow-200', label: '🟡' },
-  { id: 4, bg: 'bg-pink-400',   active: 'bg-pink-200',   label: '🩷' },
-  { id: 5, bg: 'bg-orange-400', active: 'bg-orange-200', label: '🟠' },
+  { id: 0, bg: 'bg-red-400',    glow: '0 0 24px 8px rgba(248,113,113,0.9)',  label: '🔴' },
+  { id: 1, bg: 'bg-blue-400',   glow: '0 0 24px 8px rgba(96,165,250,0.9)',   label: '🔵' },
+  { id: 2, bg: 'bg-green-400',  glow: '0 0 24px 8px rgba(74,222,128,0.9)',   label: '🟢' },
+  { id: 3, bg: 'bg-yellow-400', glow: '0 0 24px 8px rgba(250,204,21,0.9)',   label: '🟡' },
+  { id: 4, bg: 'bg-pink-400',   glow: '0 0 24px 8px rgba(244,114,182,0.9)', label: '🩷' },
+  { id: 5, bg: 'bg-orange-400', glow: '0 0 24px 8px rgba(251,146,60,0.9)',  label: '🟠' },
 ];
 
 // Tier 1: 4 colori, max livello 5, 200s
@@ -136,9 +136,11 @@ export default function SequenceGame({ onComplete, level = 1 }) {
                 key={c.id}
                 onPointerDown={() => handlePress(c.id)}
                 disabled={phase !== 'input'}
-                className={`aspect-square rounded-3xl text-5xl shadow-lg transition-all active:scale-90 disabled:cursor-default
-                  ${activeBtn === c.id ? c.active + ' scale-95 brightness-150' : c.bg}
-                  ${phase !== 'input' ? 'opacity-70' : 'opacity-100 hover:brightness-110'}`}
+                className={`aspect-square rounded-3xl text-5xl transition-all duration-150 disabled:cursor-default
+                  ${activeBtn === c.id ? c.bg + ' scale-110' : c.bg + ' shadow-lg'}
+                  ${phase === 'input' && activeBtn !== c.id ? 'opacity-100 active:scale-90' : ''}
+                  ${phase !== 'input' && activeBtn !== c.id ? 'opacity-60' : ''}`}
+              style={activeBtn === c.id ? { boxShadow: c.glow, opacity: 1 } : {}}
               >
                 {c.label}
               </button>
