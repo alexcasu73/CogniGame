@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getSetsByDifficulty } from '../data/categories';
 import GameWrapper from '../components/GameWrapper';
 import { getDifficultyTier } from '../utils/scoring';
+import { fetchOddOneOutContent } from '../api';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -12,10 +13,6 @@ function shuffle(arr) {
   return a;
 }
 
-// Tier 1: 8 domande, set facili (diff 1), 150s
-// Tier 2: 10 domande, set facili+medi (diff 1-2), 160s
-// Tier 3: 12 domande, set medi+difficili (diff 2-3), 170s
-// Tier 4: 12 domande, solo set difficili (diff 3), 180s
 const TIER_CONFIG = {
   1: { total: 8,  minDiff: 1, maxDiff: 1, timeLimit: 150 },
   2: { total: 10, minDiff: 1, maxDiff: 2, timeLimit: 160 },
@@ -23,22 +20,36 @@ const TIER_CONFIG = {
   4: { total: 12, minDiff: 3, maxDiff: 3, timeLimit: 180 },
 };
 
+function getStaticSets(tier) {
+  const { total, minDiff, maxDiff } = TIER_CONFIG[tier];
+  const pool = getSetsByDifficulty(maxDiff, minDiff);
+  return shuffle(pool).slice(0, total);
+}
+
 export default function OddOneOutGame({ onComplete, level = 1 }) {
   const tier = getDifficultyTier(level);
-  const { total: TOTAL, minDiff, maxDiff, timeLimit } = TIER_CONFIG[tier];
+  const { total: TOTAL, timeLimit } = TIER_CONFIG[tier];
 
-  const [sets] = useState(() => {
-    const pool = getSetsByDifficulty(maxDiff, minDiff);
-    return shuffle(pool).slice(0, TOTAL);
-  });
+  const [sets, setSets] = useState(null); // null = caricamento
   const [current, setCurrent] = useState(0);
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState(null);
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [gameOver, setGameOver] = useState(false);
 
+  // Carica contenuti AI, fallback a statici
+  useEffect(() => {
+    fetchOddOneOutContent(tier, TOTAL).then(items => {
+      if (items && items.length >= TOTAL) {
+        setSets(items.slice(0, TOTAL));
+      } else {
+        setSets(getStaticSets(tier));
+      }
+    });
+  }, [tier, TOTAL]);
+
   const answer = useCallback((idx) => {
-    if (feedback) return;
+    if (feedback || !sets) return;
     const set = sets[current];
     setSelectedIdx(idx);
     const correct = idx === set.odd;
@@ -57,7 +68,7 @@ export default function OddOneOutGame({ onComplete, level = 1 }) {
     }, 1200);
   }, [feedback, sets, current, TOTAL]);
 
-  const set = sets[current];
+  const set = sets ? sets[current] : null;
 
   return (
     <GameWrapper
@@ -69,7 +80,14 @@ export default function OddOneOutGame({ onComplete, level = 1 }) {
       timeLimit={timeLimit}
       difficulty={tier}
     >
-      {!gameOver && set && (
+      {!sets && !gameOver && (
+        <div className="flex flex-col items-center gap-4 pt-10">
+          <div className="animate-spin text-5xl">🔍</div>
+          <p className="text-teal-700 font-semibold text-lg">Preparo le domande...</p>
+        </div>
+      )}
+
+      {sets && !gameOver && set && (
         <div className="flex flex-col items-center gap-5 pt-2">
           <div className="bg-white rounded-2xl p-4 w-full shadow-sm text-center">
             <p className="text-sm text-gray-500 mb-2">Domanda {current + 1} di {TOTAL}</p>

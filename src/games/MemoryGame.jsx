@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { MEMORY_EMOJIS } from '../data/categories';
 import GameWrapper from '../components/GameWrapper';
 import { getDifficultyTier } from '../utils/scoring';
+import { fetchMemoryTheme } from '../api';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -24,6 +25,8 @@ export default function MemoryGame({ onComplete, level = 1 }) {
   const { pairs: PAIRS, cols, gap, emoji: emojiSize, timeLimit } = TIER_CONFIG[tier];
 
   const [cards, setCards] = useState([]);
+  const [themeName, setThemeName] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [flipped, setFlipped] = useState([]);
   const [matched, setMatched] = useState([]);
   const [score, setScore] = useState(0);
@@ -32,9 +35,18 @@ export default function MemoryGame({ onComplete, level = 1 }) {
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {
-    const emojis = shuffle(MEMORY_EMOJIS).slice(0, PAIRS);
-    const deck = shuffle([...emojis, ...emojis].map((e, i) => ({ id: i, emoji: e, matched: false })));
-    setCards(deck);
+    fetchMemoryTheme().then(theme => {
+      let emojis;
+      if (theme && theme.emoji && theme.emoji.length >= PAIRS) {
+        emojis = shuffle(theme.emoji).slice(0, PAIRS);
+        setThemeName(theme.theme);
+      } else {
+        emojis = shuffle(MEMORY_EMOJIS).slice(0, PAIRS);
+      }
+      const deck = shuffle([...emojis, ...emojis].map((e, i) => ({ id: i, emoji: e, matched: false })));
+      setCards(deck);
+      setLoading(false);
+    });
   }, [PAIRS]);
 
   const handleFlip = useCallback((id) => {
@@ -77,32 +89,48 @@ export default function MemoryGame({ onComplete, level = 1 }) {
       timeLimit={timeLimit}
       difficulty={tier}
     >
-      <div className={`grid ${gap} p-2`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-        {cards.map(card => {
-          const isFlipped = flipped.includes(card.id) || matched.includes(card.id);
-          const isMatched = matched.includes(card.id);
-          return (
-            <div
-              key={card.id}
-              className="card-flip aspect-square"
-              onClick={() => handleFlip(card.id)}
-            >
-              <div className={`card-flip-inner w-full h-full ${isFlipped ? 'flipped' : ''}`}>
-                <div className="card-face bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center cursor-pointer hover:from-purple-500 hover:to-purple-700 active:scale-95 transition-transform shadow-md">
-                  <span className="text-white text-2xl font-bold">?</span>
-                </div>
-                <div className={`card-face card-back rounded-xl flex items-center justify-center shadow-md ${isMatched ? 'bg-green-100 border-2 border-green-400' : 'bg-white border-2 border-purple-200'}`}>
-                  <span className={emojiSize}>{card.emoji}</span>
-                </div>
-              </div>
+      {loading && (
+        <div className="flex flex-col items-center gap-4 pt-10">
+          <div className="animate-spin text-5xl">🧩</div>
+          <p className="text-purple-700 font-semibold text-lg">Preparo le carte...</p>
+        </div>
+      )}
+
+      {!loading && (
+        <>
+          {themeName && (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-2 mb-2 text-center">
+              <p className="text-purple-700 font-semibold text-sm">🎨 Tema: <span className="font-bold">{themeName}</span></p>
             </div>
-          );
-        })}
-      </div>
-      <div className="mt-4 flex justify-between text-gray-600 font-medium px-2">
-        <span>✅ Trovate: {matched.length / 2}/{PAIRS}</span>
-        <span>❌ Errori: {errors}</span>
-      </div>
+          )}
+          <div className={`grid ${gap} p-2`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+            {cards.map(card => {
+              const isFlipped = flipped.includes(card.id) || matched.includes(card.id);
+              const isMatched = matched.includes(card.id);
+              return (
+                <div
+                  key={card.id}
+                  className="card-flip aspect-square"
+                  onClick={() => handleFlip(card.id)}
+                >
+                  <div className={`card-flip-inner w-full h-full ${isFlipped ? 'flipped' : ''}`}>
+                    <div className="card-face bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center cursor-pointer hover:from-purple-500 hover:to-purple-700 active:scale-95 transition-transform shadow-md">
+                      <span className="text-white text-2xl font-bold">?</span>
+                    </div>
+                    <div className={`card-face card-back rounded-xl flex items-center justify-center shadow-md ${isMatched ? 'bg-green-100 border-2 border-green-400' : 'bg-white border-2 border-purple-200'}`}>
+                      <span className={emojiSize}>{card.emoji}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex justify-between text-gray-600 font-medium px-2">
+            <span>✅ Trovate: {matched.length / 2}/{PAIRS}</span>
+            <span>❌ Errori: {errors}</span>
+          </div>
+        </>
+      )}
     </GameWrapper>
   );
 }

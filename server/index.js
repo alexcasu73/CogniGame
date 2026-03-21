@@ -1,6 +1,22 @@
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+// Carica .env manualmente (no dipendenze esterne)
+try {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const envPath = path.join(__dirname, '..', '.env');
+  const lines = readFileSync(envPath, 'utf8').split('\n');
+  for (const line of lines) {
+    const [key, ...rest] = line.split('=');
+    if (key && rest.length) process.env[key.trim()] = rest.join('=').trim();
+  }
+} catch {}
+
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import db from './db.js';
+import { generateAnagrams, generateOddOneOut, generateMemoryThemes } from './ai.js';
 
 const app = express();
 app.use(express.json());
@@ -119,6 +135,111 @@ app.post('/api/user/:id/session', (req, res) => {
   });
 });
 
+// ─── AI Content ───────────────────────────────────────────────────────────────
+
+const MIN_POOL = { anagram: 20, oddoneout: 15, memory_theme: 5 };
+const generating = new Set();
+
+async function replenishPool(type, tier) {
+  const key = `${type}/${tier}`;
+  if (generating.has(key)) return;
+  generating.add(key);
+
+  try {
+    let newItems = [];
+    if (type === 'anagram') newItems = await generateAnagrams(tier);
+    else if (type === 'oddoneout') newItems = await generateOddOneOut(tier);
+    else if (type === 'memory_theme') newItems = await generateMemoryThemes();
+
+    if (newItems.length > 0) {
+      const insert = db.prepare('INSERT INTO ai_content (content_type, tier, item) VALUES (?, ?, ?)');
+      db.transaction(() => {
+        for (const item of newItems) insert.run(type, tier, JSON.stringify(item));
+      })();
+      console.log(`✅ AI: generati ${newItems.length} elementi [${key}]`);
+    }
+  } catch (err) {
+    console.error(`❌ AI generation fallita [${key}]:`, err.message);
+  } finally {
+    generating.delete(key);
+  }
+}
+
+function pickFromPool(type, tier, count) {
+  const rows = db.prepare(
+    'SELECT id, item FROM ai_content WHERE content_type=? AND tier=? AND used=0 ORDER BY RANDOM() LIMIT ?'
+  ).all(type, tier, count);
+
+  // Se non bastano, prendi anche dagli usati (evita il vuoto)
+  if (rows.length < count) {
+    const needed = count - rows.length;
+    const extra = db.prepare(
+      'SELECT id, item FROM ai_content WHERE content_type=? AND tier=? AND used=1 ORDER BY RANDOM() LIMIT ?'
+    ).all(type, tier, needed);
+    rows.push(...extra);
+  }
+
+  if (rows.length > 0) {
+    const markUsed = db.prepare('UPDATE ai_content SET used=1 WHERE id=?');
+    db.transaction(() => rows.forEach(r => markUsed.run(r.id)))();
+  }
+
+  return rows.map(r => JSON.parse(r.item));
+}
+
+async function getContentItems(type, tier, count) {
+  const available = db.prepare(
+    'SELECT COUNT(*) as n FROM ai_content WHERE content_type=? AND tier=? AND used=0'
+  ).get(type, tier).n;
+
+  if (available < count) {
+    // Pool insufficiente: genera prima di rispondere
+    await replenishPool(type, tier);
+  } else if (available < MIN_POOL[type]) {
+    // Pool in esaurimento: rigenera in background
+    replenishPool(type, tier).catch(console.error);
+  }
+
+  return pickFromPool(type, tier, count);
+}
+
+// GET /api/content/anagram/:tier?count=N
+app.get('/api/content/anagram/:tier', async (req, res) => {
+  const tier = Math.max(1, Math.min(4, Number(req.params.tier) || 1));
+  const count = Number(req.query.count) || 10;
+  try {
+    const items = await getContentItems('anagram', tier, count);
+    if (items.length === 0) return res.status(503).json({ fallback: true });
+    res.json({ items });
+  } catch (err) {
+    res.status(503).json({ fallback: true });
+  }
+});
+
+// GET /api/content/oddoneout/:tier?count=N
+app.get('/api/content/oddoneout/:tier', async (req, res) => {
+  const tier = Math.max(1, Math.min(4, Number(req.params.tier) || 1));
+  const count = Number(req.query.count) || 10;
+  try {
+    const items = await getContentItems('oddoneout', tier, count);
+    if (items.length === 0) return res.status(503).json({ fallback: true });
+    res.json({ items });
+  } catch (err) {
+    res.status(503).json({ fallback: true });
+  }
+});
+
+// GET /api/content/memory-theme
+app.get('/api/content/memory-theme', async (req, res) => {
+  try {
+    const items = await getContentItems('memory_theme', 0, 1);
+    if (items.length === 0) return res.status(503).json({ fallback: true });
+    res.json({ theme: items[0] });
+  } catch (err) {
+    res.status(503).json({ fallback: true });
+  }
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getProgress(userId) {
@@ -149,4 +270,16 @@ const vite = await createViteServer({
 
 app.use(vite.middlewares);
 
-app.listen(PORT, () => console.log(`CogniGame running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`CogniGame running on http://localhost:${PORT}`);
+
+  // Pre-genera contenuti AI in background all'avvio
+  if (process.env.ANTHROPIC_API_KEY) {
+    console.log('🤖 Avvio pre-generazione contenuti AI...');
+    for (const tier of [1, 2, 3, 4]) {
+      replenishPool('anagram', tier).catch(console.error);
+      replenishPool('oddoneout', tier).catch(console.error);
+    }
+    replenishPool('memory_theme', 0).catch(console.error);
+  }
+});

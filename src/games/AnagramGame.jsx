@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getWordsByDifficulty, scrambleWord } from '../data/words';
 import GameWrapper from '../components/GameWrapper';
 import { getDifficultyTier } from '../utils/scoring';
+import { fetchAnagramContent } from '../api';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -12,10 +13,6 @@ function shuffle(arr) {
   return a;
 }
 
-// Tier 1: parole corte (diff 1), 8 parole
-// Tier 2: parole medie (diff 1-2), 8 parole
-// Tier 3: parole medie-lunghe (diff 2-3), 10 parole
-// Tier 4: parole lunghe (diff 3), 12 parole
 const TIER_CONFIG = {
   1: { total: 8,  minDiff: 1, maxDiff: 1, timeLimit: 180 },
   2: { total: 8,  minDiff: 1, maxDiff: 2, timeLimit: 200 },
@@ -23,14 +20,17 @@ const TIER_CONFIG = {
   4: { total: 12, minDiff: 3, maxDiff: 3, timeLimit: 270 },
 };
 
+function getStaticWords(tier) {
+  const { total, minDiff, maxDiff } = TIER_CONFIG[tier];
+  const pool = getWordsByDifficulty(maxDiff, minDiff);
+  return shuffle(pool).slice(0, total);
+}
+
 export default function AnagramGame({ onComplete, level = 1 }) {
   const tier = getDifficultyTier(level);
-  const { total: TOTAL, minDiff, maxDiff, timeLimit } = TIER_CONFIG[tier];
+  const { total: TOTAL, timeLimit } = TIER_CONFIG[tier];
 
-  const [words] = useState(() => {
-    const pool = getWordsByDifficulty(maxDiff, minDiff);
-    return shuffle(pool).slice(0, TOTAL);
-  });
+  const [words, setWords] = useState(null); // null = caricamento
   const [current, setCurrent] = useState(0);
   const [scrambled, setScrambled] = useState('');
   const [selected, setSelected] = useState([]);
@@ -40,8 +40,22 @@ export default function AnagramGame({ onComplete, level = 1 }) {
   const [shake, setShake] = useState(false);
   const [gameOver, setGameOver] = useState(false);
 
+  // Carica contenuti AI, fallback a statici
   useEffect(() => {
-    if (current >= TOTAL) { setGameOver(true); return; }
+    fetchAnagramContent(tier, TOTAL).then(items => {
+      if (items && items.length >= TOTAL) {
+        setWords(items.slice(0, TOTAL));
+      } else {
+        setWords(getStaticWords(tier));
+      }
+    });
+  }, [tier, TOTAL]);
+
+  useEffect(() => {
+    if (!words || current >= TOTAL) {
+      if (words && current >= TOTAL) setGameOver(true);
+      return;
+    }
     const w = words[current];
     const s = scrambleWord(w.word);
     setScrambled(s);
@@ -51,7 +65,7 @@ export default function AnagramGame({ onComplete, level = 1 }) {
   }, [current, words, TOTAL]);
 
   const selectLetter = useCallback((item) => {
-    if (item.used) return;
+    if (item.used || !words) return;
     setAvailable(av => av.map(a => a.id === item.id ? { ...a, used: true } : a));
     const newSelected = [...selected, item];
     setSelected(newSelected);
@@ -84,7 +98,7 @@ export default function AnagramGame({ onComplete, level = 1 }) {
     setSelected(s => s.slice(0, -1));
   }, [selected]);
 
-  const word = words[current];
+  const word = words ? words[current] : null;
 
   return (
     <GameWrapper
@@ -96,7 +110,14 @@ export default function AnagramGame({ onComplete, level = 1 }) {
       timeLimit={timeLimit}
       difficulty={tier}
     >
-      {!gameOver && word && (
+      {!words && !gameOver && (
+        <div className="flex flex-col items-center gap-4 pt-10">
+          <div className="animate-spin text-5xl">🔤</div>
+          <p className="text-blue-700 font-semibold text-lg">Preparo le parole...</p>
+        </div>
+      )}
+
+      {words && !gameOver && word && (
         <div className="flex flex-col items-center gap-5 pt-2">
           <div className="text-center bg-white rounded-2xl p-4 w-full shadow-sm">
             <p className="text-sm text-gray-500 mb-1">Parola {current + 1} di {TOTAL}</p>
