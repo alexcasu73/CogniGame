@@ -38,6 +38,7 @@ export default function AnagramGame({ onComplete, level = 1 }) {
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState(null);
   const [shake, setShake] = useState(false);
+  const [attempts, setAttempts] = useState(0);
   const [gameOver, setGameOver] = useState(false);
 
   // Carica contenuti AI, fallback a statici
@@ -62,6 +63,7 @@ export default function AnagramGame({ onComplete, level = 1 }) {
     setAvailable(s.split('').map((l, i) => ({ id: i, letter: l, used: false })));
     setSelected([]);
     setFeedback(null);
+    setAttempts(0);
   }, [current, words, TOTAL]);
 
   const selectLetter = useCallback((item) => {
@@ -79,14 +81,22 @@ export default function AnagramGame({ onComplete, level = 1 }) {
         setScore(s => s + 10);
         setTimeout(() => setCurrent(c => c + 1), 800);
       } else {
-        setFeedback('wrong');
-        setShake(true);
-        setTimeout(() => {
-          setShake(false);
-          setAvailable(av => av.map(a => ({ ...a, used: false })));
-          setSelected([]);
-          setFeedback(null);
-        }, 600);
+        const newAttempts = attempts + 1;
+        setAttempts(newAttempts);
+        if (newAttempts >= 3) {
+          // Terzo errore: mostra la risposta e vai avanti
+          setFeedback('revealed');
+          setTimeout(() => setCurrent(c => c + 1), 2500);
+        } else {
+          setFeedback('wrong');
+          setShake(true);
+          setTimeout(() => {
+            setShake(false);
+            setAvailable(av => av.map(a => ({ ...a, used: false })));
+            setSelected([]);
+            setFeedback(null);
+          }, 600);
+        }
       }
     }
   }, [selected, words, current]);
@@ -138,6 +148,12 @@ export default function AnagramGame({ onComplete, level = 1 }) {
           </div>
 
           {feedback === 'correct' && <p className="text-green-600 font-bold text-xl animate-pop">✅ Bravo!</p>}
+          {feedback === 'revealed' && (
+            <div className="text-center bg-orange-50 border border-orange-200 rounded-2xl p-3 w-full">
+              <p className="text-orange-700 font-bold text-lg">⏱️ La risposta era:</p>
+              <p className="text-orange-800 font-black text-2xl tracking-widest">{word.word}</p>
+            </div>
+          )}
 
           <div className="flex gap-2 flex-wrap justify-center">
             {available.map(item => (

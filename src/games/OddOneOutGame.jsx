@@ -65,7 +65,7 @@ export default function OddOneOutGame({ onComplete, level = 1 }) {
         setFeedback(null);
         setSelectedIdx(null);
       }
-    }, 1200);
+    }, 3000);
   }, [feedback, sets, current, TOTAL]);
 
   const set = sets ? sets[current] : null;
