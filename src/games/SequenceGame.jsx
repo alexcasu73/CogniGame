@@ -11,16 +11,14 @@ const ALL_COLORS = [
   { id: 5, bg: 'bg-orange-400', glow: '0 0 24px 8px rgba(251,146,60,0.9)',  label: '🟠' },
 ];
 
-// Tier 1: 4 colori, max livello 5, 200s
-// Tier 2: 4 colori, max livello 8, 240s
-// Tier 3: 6 colori, max livello 8, 260s
-// Tier 4: 6 colori, max livello 10, 300s
 const TIER_CONFIG = {
   1: { colorCount: 4, maxLevel: 5,  timeLimit: 200 },
   2: { colorCount: 4, maxLevel: 8,  timeLimit: 240 },
   3: { colorCount: 6, maxLevel: 8,  timeLimit: 260 },
   4: { colorCount: 6, maxLevel: 10, timeLimit: 300 },
 };
+
+const MAX_LIVES = 3;
 
 export default function SequenceGame({ onComplete, level = 1 }) {
   const tier = getDifficultyTier(level);
@@ -34,6 +32,7 @@ export default function SequenceGame({ onComplete, level = 1 }) {
   const [activeBtn, setActiveBtn] = useState(null);
   const [seqLevel, setSeqLevel] = useState(1);
   const [score, setScore] = useState(0);
+  const [lives, setLives] = useState(MAX_LIVES);
   const [gameOver, setGameOver] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
@@ -74,9 +73,20 @@ export default function SequenceGame({ onComplete, level = 1 }) {
 
     const idx = newUserSeq.length - 1;
     if (newUserSeq[idx] !== sequence[idx]) {
+      const newLives = lives - 1;
+      setLives(newLives);
       setFeedback('wrong');
-      setPhase('result');
-      setGameOver(true);
+      setPhase('wait');
+
+      if (newLives <= 0) {
+        setTimeout(() => {
+          setPhase('result');
+          setGameOver(true);
+        }, 1000);
+      } else {
+        // Ripeti la stessa sequenza
+        setTimeout(() => startLevel(seqLevel), 1200);
+      }
       return;
     }
 
@@ -94,7 +104,9 @@ export default function SequenceGame({ onComplete, level = 1 }) {
         setTimeout(() => startLevel(newLevel), 900);
       }
     }
-  }, [phase, userSeq, sequence, seqLevel, score, startLevel, MAX_LEVEL]);
+  }, [phase, userSeq, sequence, seqLevel, score, lives, startLevel, MAX_LEVEL]);
+
+  const heartsDisplay = Array.from({ length: MAX_LIVES }, (_, i) => i < lives ? '❤️' : '🖤');
 
   return (
     <GameWrapper
@@ -102,14 +114,17 @@ export default function SequenceGame({ onComplete, level = 1 }) {
       skillName="Memoria di lavoro"
       maxScore={MAX_LEVEL * 10} score={score}
       gameOver={gameOver} onComplete={onComplete}
-      instructions={`Guarda la sequenza di colori che lampeggia, poi ripetila nello stesso ordine. Hai ${colorCount} colori e ${MAX_LEVEL} livelli!`}
+      instructions={`Guarda la sequenza di colori che lampeggia, poi ripetila nello stesso ordine. Hai ${colorCount} colori, ${MAX_LEVEL} livelli e ${MAX_LIVES} vite!`}
       timeLimit={timeLimit}
       difficulty={tier}
     >
       {!gameOver && (
         <div className="flex flex-col items-center gap-6 pt-2">
           <div className="bg-white rounded-2xl p-4 w-full text-center shadow-sm">
-            <p className="text-gray-500 text-sm">Livello {seqLevel} di {MAX_LEVEL}</p>
+            <div className="flex justify-between items-center">
+              <p className="text-gray-500 text-sm">Livello {seqLevel} di {MAX_LEVEL}</p>
+              <p className="text-xl">{heartsDisplay.join(' ')}</p>
+            </div>
             <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
               <div className="bg-green-500 h-2 rounded-full transition-all" style={{width: `${((seqLevel-1)/MAX_LEVEL)*100}%`}}/>
             </div>
@@ -128,6 +143,11 @@ export default function SequenceGame({ onComplete, level = 1 }) {
               </div>
             )}
             {feedback === 'correct' && <p className="text-green-600 font-bold text-lg animate-pop">✅ Bravissimo! Livello {seqLevel}!</p>}
+            {feedback === 'wrong' && (
+              <p className="text-red-600 font-bold text-lg animate-pop">
+                ❌ Sbagliato! {lives > 0 ? `Riprova (${lives} ${lives === 1 ? 'vita' : 'vite'} rimaste)` : 'Nessuna vita rimasta!'}
+              </p>
+            )}
           </div>
 
           <div className={`grid ${gridCols} gap-4 w-full max-w-xs`}>
@@ -140,7 +160,7 @@ export default function SequenceGame({ onComplete, level = 1 }) {
                   ${activeBtn === c.id ? c.bg + ' scale-110' : c.bg + ' shadow-lg'}
                   ${phase === 'input' && activeBtn !== c.id ? 'opacity-100 active:scale-90' : ''}
                   ${phase !== 'input' && activeBtn !== c.id ? 'opacity-60' : ''}`}
-              style={activeBtn === c.id ? { boxShadow: c.glow, opacity: 1 } : {}}
+                style={activeBtn === c.id ? { boxShadow: c.glow, opacity: 1 } : {}}
               >
                 {c.label}
               </button>
